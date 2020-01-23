@@ -8,7 +8,7 @@ import (
 
 var tenSecondTimeout = 10 * time.Second
 
-// Racer return the fastest of 2 URLs
+// Racer return the ConfigurableRacer with timeoute specified
 func Racer(a, b string)  (winner string, err error) {
 	return ConfigurableRacer(a, b, tenSecondTimeout)
 }
