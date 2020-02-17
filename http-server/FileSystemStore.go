@@ -2,24 +2,63 @@ package main
 
 import (
 	"encoding/json"
-	"io"
+	"fmt"
+	"os"
+	"sort"
 )
 
 // FileSystemPlayerStore implements Store that can be save to disk
 type FileSystemPlayerStore struct {
-	database io.ReadWriteSeeker
+	database *json.Encoder
+	league   League
 }
 
-// GetLeague returns list of Players
+func initializePlayerDBFile(file *os.File) (err error) {
+	file.Seek(0, 0)
+
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("problem getting file info from %s: %v", file.Name(), err)
+	}
+
+	if info.Size() == 0 {
+		file.Write([]byte("[]"))
+		file.Seek(0, 0)
+	}
+
+	return nil
+}
+
+// NewFileSystemPlayerStore instantiates our Store
+func NewFileSystemPlayerStore(file *os.File) (*FileSystemPlayerStore, error) {
+
+	err := initializePlayerDBFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("problem initializing player db file %v", err)
+	}
+
+	league, err := NewLeague(file)
+	if err != nil {
+		return nil, fmt.Errorf("problem loading player store from %s: %v", file.Name(), err)
+	}
+
+	return &FileSystemPlayerStore{
+		database: json.NewEncoder(&tape{file}),
+		league:   league,
+	}, nil
+}
+
+// GetLeague returns list of Players sorted from most to least wins
 func (f *FileSystemPlayerStore) GetLeague() League {
-	f.database.Seek(0, 0)
-	league, _ := NewLeague(f.database)
-	return league
+	sort.Slice(f.league, func(i, j int) bool {
+		return f.league[i].Wins > f.league[j].Wins
+	})
+	return f.league
 }
 
 // GetPlayerScore returns player's score
 func (f *FileSystemPlayerStore) GetPlayerScore(name string) int {
-	player := f.GetLeague().Find(name)
+	player := f.league.Find(name)
 
 	if player != nil {
 		return player.Wins
@@ -30,15 +69,13 @@ func (f *FileSystemPlayerStore) GetPlayerScore(name string) int {
 
 // RecordWin records the win
 func (f *FileSystemPlayerStore) RecordWin(name string) {
-	league := f.GetLeague()
-	player := league.Find(name)
+	player := f.league.Find(name)
 
 	if player != nil {
 		player.Wins++
 	} else {
-		league = append(league, Player{name, 1})
+		f.league = append(f.league, Player{name, 1})
 	}
 
-	f.database.Seek(0, 0)
-	json.NewEncoder(f.database).Encode(league)
+	f.database.Encode(f.league)
 }
