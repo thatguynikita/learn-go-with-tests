@@ -3,6 +3,7 @@ package poker
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 )
@@ -78,4 +79,23 @@ func (f *FileSystemPlayerStore) RecordWin(name string) {
 	}
 
 	f.database.Encode(f.league)
+}
+
+// FileSystemPlayerStoreFromFile creates a PlayerStore from the contents of a JSON file found at path
+func FileSystemPlayerStoreFromFile(path string) (*FileSystemPlayerStore, func(), error) {
+	db, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		log.Fatalf("problem opening %s: %v", path, err)
+	}
+
+	closeFunc := func() {
+		db.Close()
+	}
+
+	store, err := NewFileSystemPlayerStore(db)
+	if err != nil {
+		log.Fatalf("problem creating filesystem store %s: %v", db.Name(), err)
+	}
+
+	return store, closeFunc, err
 }
